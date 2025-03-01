@@ -1,4 +1,4 @@
-# Tomcat Deployment Automation Script
+# Tomcat Automation Script
 
 This PowerShell script automates the process of building, deploying, and managing jsp web applications on Apache Tomcat, Opening browser, Reloading page with no user interaction.
 
