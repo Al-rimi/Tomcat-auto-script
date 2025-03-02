@@ -236,6 +236,7 @@ switch ($action) {
                 $chromeTitle = $process.MainWindowTitle
                 if ($chromeTitle -like "*$APP_NAME*") {
                     $chromeOpened = $true
+                    Add-Type -AssemblyName System.Windows.Forms
                     [System.Windows.Forms.SendKeys]::SendWait("^{F5}") # Ctrl+F5 for hard refresh
                     INFO "Google Chrome reloaded"
                     break
