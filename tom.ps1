@@ -216,7 +216,7 @@ switch ($action) {
         if ($tomcatRunning) {
         INFO "Tomcat is already running, reloading"
         $creds = New-Object System.Management.Automation.PSCredential("admin", (ConvertTo-SecureString "admin" -AsPlainText -Force))
-        Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds -AllowUnencryptedAuthentication | Out-Null        
+        Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds | Out-Null        
         INFO "Tomcat reloaded"
   
         }  else {
