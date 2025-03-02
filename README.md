@@ -2,7 +2,10 @@
 
 This PowerShell script automates the process of building, deploying, and managing JSP web applications on Apache Tomcat, opening the browser, and reloading the page with no user interaction.
 
-![Video](Recording-tom.mp4)
+<video width="600" controls>
+  <source src="Recording-tom.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ## Features
 
