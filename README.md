@@ -2,7 +2,7 @@
 
 This PowerShell script automates the process of building, deploying, and managing JSP web applications on Apache Tomcat, opening the browser, and reloading the page with no user interaction.
 
-![Video](./Recording-tom.mp4)
+![Video](./Tom-Video.gif)
 
 ## Features
 
