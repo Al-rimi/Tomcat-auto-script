@@ -1,16 +1,4 @@
 <#
-.SYNOPSIS
-    Automates the lifecycle of building, deploying, and managing a JSP web application on Apache Tomcat.
-
-.DESCRIPTION
-    This PowerShell script streamlines the development workflow by performing the following tasks:
-    - Validates environment variables for JDK and Tomcat.
-    - Builds the project using Maven to generate a WAR file.
-    - Deploys the WAR file to the Tomcat `webapps` directory.
-    - Starts or stops the Tomcat server.
-    - Reloads the web application without restarting Tomcat.
-    - Automatically opens or refreshes the application in Google Chrome.
-
 .PARAMETER action
     Specifies the operation to perform. Acceptable values:
     - start    : Starts the Tomcat server.
@@ -19,18 +7,6 @@
     - clean    : Cleans previous deployments.
     - auto     : Automates the entire build, deploy, and reload process.
     - help     : Displays this help message.
-
-.EXAMPLE
-    .\deploy-webapp.ps1 auto
-    Automates the entire lifecycle: builds, deploys, reloads, and opens the application in Google Chrome.
-
-.EXAMPLE
-    .\deploy-webapp.ps1 start
-    Starts the Tomcat server.
-
-.EXAMPLE
-    .\deploy-webapp.ps1 stop
-    Stops the Tomcat server.
 
 .NOTES
     Author: Al-rimi
