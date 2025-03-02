@@ -214,14 +214,11 @@ switch ($action) {
         $APP_NAME = [System.IO.Path]::GetFileNameWithoutExtension($WAR_FILE)
         
         if ($tomcatRunning) {
-            try {
-                $creds = New-Object System.Management.Automation.PSCredential("admin", (ConvertTo-SecureString "admin" -AsPlainText -Force))
-                Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds | Out-Null
-                INFO "Tomcat reloaded"
-            } catch {
-                Write-Host "[ERROR] Failed to reload Tomcat. Check your credentials and Tomcat manager settings." -ForegroundColor Red
-                exit 1
-            }
+        INFO "Tomcat is already running, reloading"
+        $creds = New-Object System.Management.Automation.PSCredential("admin", (ConvertTo-SecureString "admin" -AsPlainText -Force))
+        Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds -AllowUnencryptedAuthentication | Out-Null        
+        INFO "Tomcat reloaded"
+  
         }  else {
             Tomcat -Action start
         }        
