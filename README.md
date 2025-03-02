@@ -93,6 +93,17 @@ Explanation: If Tomcat is running, the script uses the Tomcat manager's API to r
 ```
 
 This line grants the necessary permissions to the Tomcat manager for reloading the application.
+
+### For Newer PowerShell Versions:
+In newer versions of PowerShell, you might need to include the `-AllowUnencryptedAuthentication` flag when running the script to enable basic authentication for the Tomcat manager API. The rest of the command should remain unchanged.
+
+Example:
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds -AllowUnencryptedAuthentication
+```
+
+Without this flag, you might encounter errors related to unencrypted communication during authentication.
 </details>
 
 <details>
