@@ -1,6 +1,6 @@
 # Tomcat Automation Script
 
-This PowerShell script automates the process of building, deploying, and managing jsp web applications on Apache Tomcat, Opening browser, Reloading page with no user interaction.
+This PowerShell script automates the process of building, deploying, and managing JSP web applications on Apache Tomcat, opening the browser, and reloading the page with no user interaction.
 
 ## Features
 
@@ -30,7 +30,7 @@ $WAR_FILE = Get-ChildItem -Path "$PROJECT_DIR\target" -Filter "*.war" | Select-O
 $APP_NAME = [System.IO.Path]::GetFileNameWithoutExtension($WAR_FILE)
 
 if (-not $WAR_FILE) {
-    Write-Host "$ERROR No WAR file found. Closing Tomcat..." -ForegroundColor Red
+    Write-Host "[ERROR] No WAR file found. Closing Tomcat..." -ForegroundColor Red
     exit 1
 }
 
@@ -49,7 +49,7 @@ The script includes functionality to start or stop Tomcat depending on the given
 ```powershell
 function Tomcat {
     param (
-        [ValidateSet("start", "stop")] 
+        [ValidateSet("start", "stop")]
         [string]$Action
     )
     $javaExecutable = "$env:JAVA_HOME\bin\java.exe"
@@ -73,15 +73,20 @@ If Tomcat is already running, the script will reload the application rather than
 
 ```powershell
 if ($tomcatRunning) {
-    $creds = New-Object System.Management.Automation.PSCredential("admin", (ConvertTo-SecureString "admin" -AsPlainText -Force))
-    Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds | Out-Null
-    INFO "Tomcat reloaded"
+    try {
+        $creds = New-Object System.Management.Automation.PSCredential("admin", (ConvertTo-SecureString "admin" -AsPlainText -Force))
+        Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds | Out-Null
+        INFO "Tomcat reloaded"
+    } catch {
+        Write-Host "[ERROR] Failed to reload Tomcat. Check your credentials and Tomcat manager settings." -ForegroundColor Red
+        exit 1
+    }
 } else {
     Tomcat -Action start
 }
 ```
 
-Explanation: If Tomcat is running, the script uses the Tomcat manager's API to reload the application without restarting the server. If Tomcat is not running, it starts the server first.
+Explanation: If Tomcat is running, the script uses the Tomcat manager's API to reload the application without restarting the server. If Tomcat is not running, it starts the server first. The code now includes exception handling to catch errors during the reload process.
 </details>
 
 <details>
@@ -117,6 +122,16 @@ if ($chromeProcesses) {
 Explanation: The script checks if Google Chrome is already open and refreshes the tab with the deployed application. If Chrome is not open, it launches a new instance with the application URL.
 </details>
 
+## Parameter Actions
+| Action    | Description                           |
+|----------|--------------------------------------|
+| start    | Starts the Tomcat server             |
+| stop     | Stops the Tomcat server              |
+| deploy   | Deploys the WAR file to Tomcat       |
+| clean    | Cleans previous deployments          |
+| auto     | Automates the entire process         |
+| help     | Displays help message               |
+
 ## Prerequisites
 Before using this script, ensure the following requirements are met:
 
@@ -124,6 +139,11 @@ Before using this script, ensure the following requirements are met:
 2. **[Apache Tomcat](https://tomcat.apache.org/download-90.cgi)**: Installed and `CATALINA_HOME` environment variable is correctly set.
 3. **[Maven](https://maven.apache.org/download.cgi)**: Installed and added to the system's `PATH`.
 4. **[Google Chrome](https://www.google.com/chrome/)**: Installed for automatic browser interaction.
+5. **Tomcat Users Configuration**: Update the `tomcat-users.xml` file in the Tomcat `conf` directory with the following line:
+
+```xml
+<user username="admin" password="admin" roles="manager-gui,manager-script"/>
+```
 
 ### Windows PowerShell Execution Policy
 By default, PowerShell may restrict running scripts due to security policies. To allow this script to run, execute the following command in PowerShell:
@@ -137,47 +157,14 @@ This command grants permission to run locally created scripts.
 ## Installation
 1. Copy the script to your desired directory.
 2. Add the directory path to the system's **Environment Variables** to make the script accessible globally.
-   - Open **System Properties** → **Environment Variables**.
-   - Add the script's directory path to the **Path** variable under **System Variables**.
 
 ## Usage
-To execute the script, simply run the `redeploy` script file. This must be executed in the directory containing the `pom.xml` file. It is crucial that the script is run from inside a **Maven project**.
+To execute the script, simply run the `redeploy` script file in the directory containing the `pom.xml` file.
 
 Example:
 ```powershell
-.\redeploy.ps1
+tom auto
 ```
-
-This script assumes that the working directory contains the `pom.xml` file, indicating a valid Maven project. If the `pom.xml` is missing, the script will not run.
-
-### Extendable Code
-This script is designed to be **extendable**. You can add new functionality such as pre-deployment checks, custom notifications, or integrate with other tools.
-
-### Add Custom Future Extensions:
-- **Custom Deployment Notifications**: You can modify the script to send email or Slack notifications after deployment.
-- **Custom Build Scripts**: Add new Maven goals or other build scripts as part of the `mvn clean package` command.
-
-## VS Code Automatic Execution
-For Visual Studio Code users, the script can be configured to run automatically on file save using the **Run on Save** extension.
-
-1. Install the extension from this repository: [vscode-run-on-save](https://github.com/pucelle/vscode-run-on-save).
-2. Add the following configuration to your VS Code settings:
-
-```json
-  "runOnSave.shell": "PowerShell",
-  "runOnSave.commands": [
-      {
-          "match": ".*$",
-          "command": "redeploy",
-      }
-  ],
-  "runOnSave.defaultRunIn": "terminal",
-```
-
-## Error Handling
-- If **JAVA_HOME** or **CATALINA_HOME** is not set correctly, the script will terminate with an appropriate error message.
-- Maven build failures will stop further deployment.
-- Missing WAR files will prompt Tomcat shutdown before exit.
 
 ## License
 This script is licensed under the MIT [License](License).
