@@ -75,7 +75,7 @@ If Tomcat is already running, the script will reload the application rather than
 if ($tomcatRunning) {
     try {
         $creds = New-Object System.Management.Automation.PSCredential("admin", (ConvertTo-SecureString "admin" -AsPlainText -Force))
-        Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds -AllowUnencryptedAuthentication | Out-Null
+        Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds | Out-Null
         INFO "Tomcat reloaded"
     } catch {
         Write-Host "[ERROR] Failed to reload Tomcat. Check your credentials and Tomcat manager settings." -ForegroundColor Red
@@ -86,7 +86,13 @@ if ($tomcatRunning) {
 }
 ```
 
-Explanation: If Tomcat is running, the script uses the Tomcat manager's API to reload the application without restarting the server. If Tomcat is not running, it starts the server first. The code now includes exception handling to catch errors during the reload process.
+Explanation: If Tomcat is running, the script uses the Tomcat manager's API to reload the application without restarting the server. If Tomcat is not running, it starts the server first. **Note:** The script will crash if the following line is not added to `apache-tomcat\conf\tomcat-users.xml`:
+
+```xml
+<user username="admin" password="admin" roles="manager-gui,manager-script"/>
+```
+
+This line grants the necessary permissions to the Tomcat manager for reloading the application.
 </details>
 
 <details>
