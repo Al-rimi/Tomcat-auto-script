@@ -1,49 +1,57 @@
 <#
-.PARAMETER action
-    Specifies the operation to perform. Acceptable values:
-    - start    : Starts the Tomcat server.
-    - stop     : Stops the Tomcat server.
-    - deploy   : Deploys the WAR file to Tomcat.
-    - clean    : Cleans previous deployments.
-    - auto     : Automates the entire build, deploy, and reload process.
-    - help     : Displays this help message.
-
-.NOTES
     Author: Al-rimi
-    Version: 1.1
+    Version: 2.0
     Requirements:
     - JDK installed and `JAVA_HOME` set.
     - Apache Tomcat installed and `CATALINA_HOME` set.
     - Maven installed and available in `PATH`.
     - Google Chrome installed for browser automation.
-
 #>
 
 param (
-    [Parameter(Mandatory=$false)]
-    [ValidateSet("start", "stop", "deploy", "clean", "auto", "help")]
-    [string]$action
+    [ValidateSet("start", "stop", "clean", "deploy", "help")]
+    [string]$Action,
+
+    [ValidateSet("dev", "mvn")]
+    [string]$SubAction
 )
 
-$javaExecutable = "$env:JAVA_HOME\bin\java.exe"
+function HELP {
+    $ScriptName = [System.IO.Path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Name)
+    Write-Host @"
+=============================================================
+             $ScriptName - Deployment Script Help
+=============================================================
+Usage:
+$ScriptName <action> [<subaction>]
 
-if (-not (Test-Path $javaExecutable)) {
-    Write-Host "[ERROR] JAVA_HOME is not set correctly. Exiting." -ForegroundColor Red
-    exit 1
-}
+Actions:
+stop      - Gracefully stops the Tomcat service if running.
+            Ensures no abrupt service termination.
 
-$TOMCAT_HOME = [System.Environment]::GetEnvironmentVariable("CATALINA_HOME", "Machine")
+clean     - Cleans the Tomcat deployment directory.
+            Removes temporary files and cached data to ensure a fresh deployment.
 
-$tomcatRunning = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*catalina*" }
+start     - Starts the Tomcat service.
+            Ensures the service is up and running after cleaning or deploying.
 
-if (-not $TOMCAT_HOME) {
-    Write-Host "[ERROR] CATALINA_HOME environment variable is not set. Exiting." -ForegroundColor Red
-    if ($tomcatRunning) {
-        Tomcat -Action stop
-    } else {
-        INFO "Tomcat is not running"
-    }
-    exit 1
+deploy    - Deploys the latest application version to the Tomcat server.
+            Copies necessary files and prepares the environment.
+            Requires a subaction:
+              dev - Copies files directly from the development folder.
+              mvn - Builds the project with Maven and deploys the generated WAR file.
+
+help      - Displays this help message with detailed descriptions.
+
+=============================================================
+Examples:
+$ScriptName stop        # Gracefully stops Tomcat service
+$ScriptName clean       # Cleans the Tomcat deployment
+$ScriptName deploy dev  # Deploys the application using development folder
+$ScriptName deploy mvn  # Deploys the application using Maven build
+$ScriptName help        # Shows this help message
+=============================================================
+"@
 }
 
 function INFO {
@@ -52,11 +60,76 @@ function INFO {
     Write-Host "] $args"
 }
 
-function Tomcat {
+function ERRORLOG {
+    Write-Host "[" -NoNewline
+    Write-Host "ERROR" -ForegroundColor Red -NoNewline
+    Write-Host "] $args"
+}
+
+function DONE {
+    Write-Host "[" -NoNewline
+    Write-Host "DONE" -ForegroundColor Green -NoNewline
+    Write-Host "] $args" -NoNewline
+}
+
+$TOMCAT_HOME = [System.Environment]::GetEnvironmentVariable("CATALINA_HOME", "Machine")
+
+if (-not $TOMCAT_HOME) {
+    ERRORLOG "CATALINA_HOME environment variable is not set. Exiting."
+    exit 1
+}
+
+$PROJECT_DIR = Get-Location
+$APP_NAME = (Get-Item $PROJECT_DIR).Name
+$TARGET_DIR = "$TOMCAT_HOME\webapps\$APP_NAME"
+
+function cleanOldDeployments {
+    if (Test-Path "$TOMCAT_HOME\webapps\$APP_NAME.war") {
+        Remove-Item -Path "$TOMCAT_HOME\webapps\$APP_NAME.war" -Force -ErrorAction SilentlyContinue
+        INFO "Old WAR deployment removed"
+    }
+    if (Test-Path "$TOMCAT_HOME\webapps\$APP_NAME") {
+        Remove-Item -Path "$TOMCAT_HOME\webapps\$APP_NAME" -Recurse -Force -ErrorAction SilentlyContinue
+    } else {
+        INFO "No previous deployment found"
+    }
+}
+
+function tomcat {
     param (
-        [ValidateSet("start", "stop")]
+        [ValidateSet("start", "stop", "reload")]
         [string]$Action
     )
+
+    $javaExecutable = "$env:JAVA_HOME\bin\java.exe"
+    if (-not (Test-Path $javaExecutable)) {
+        ERRORLOG "JAVA_HOME is not set correctly. Exiting."
+        exit 1
+    }
+
+    $tomcatRunning = Get-Process -Name "java" -ErrorAction SilentlyContinue
+
+    if ($tomcatRunning) {
+        if ($Action -eq "start") {
+            INFO "Tomcat is already running"
+            return
+        } 
+        if ($Action -eq "reload") {
+            $creds = New-Object System.Management.Automation.PSCredential("admin", (ConvertTo-SecureString "admin" -AsPlainText -Force))
+            Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds | Out-Null        
+            INFO "Tomcat reloaded"
+            return
+        }
+    } else {
+        if ($Action -eq "stop") {
+            INFO "Tomcat is not running"
+            return
+        }
+        if ($Action -eq "reload") {
+            INFO "Tomcat is not running"
+            $Action = "start"
+        }
+    }
 
     $classpath = "$TOMCAT_HOME\bin\bootstrap.jar;$TOMCAT_HOME\bin\tomcat-juli.jar"
     $mainClass = "org.apache.catalina.startup.Bootstrap"
@@ -69,7 +142,7 @@ function Tomcat {
         -ArgumentList "-cp", $classpath, $catalinaOpts, $mainClass, $Action `
         -NoNewWindow `
         -RedirectStandardOutput $logOut `
-        -RedirectStandardError $logErr `
+        -RedirectStandardERROR $logErr `
 
     if ($Action -eq "start") {
         INFO "Tomcat started successfully"
@@ -79,194 +152,123 @@ function Tomcat {
     }
 }
 
-function War {
+function deploy{
     param (
-        [ValidateSet("remove", "deploy")]
-        [string]$Action
+        [ValidateSet("dev", "mvn")]
+        [string]$Type
     )
 
-    $PROJECT_DIR = Get-Location
-    if (-not (Test-Path "$PROJECT_DIR\pom.xml")) {
-        exit 1
-    }
-
-    $WAR_FILE = Get-ChildItem -Path "$PROJECT_DIR\target" -Filter "*.war" | Select-Object -First 1 -ExpandProperty FullName
-    $APP_NAME = [System.IO.Path]::GetFileNameWithoutExtension($WAR_FILE)
+    cleanOldDeployments
     
-    if (-not $WAR_FILE) {
-        Write-Host "$ERROR No WAR file found. Closing Tomcat..." -ForegroundColor Red
-        if ($tomcatRunning) {
-            Tomcat -Action stop
-        } else {
-            INFO "Tomcat is not running"
+    if ($Type -eq "dev") {
+        if (-not (Test-Path "$PROJECT_DIR\src\main\webapp")) {
+            ERRORLOG "Project structure not found."
+            exit 1
         }
-        exit 1
-    }
     
-    INFO "WAR file found: $APP_NAME.war"
+        New-Item -ItemType Directory -Path $TARGET_DIR | Out-Null
+        New-Item -ItemType Directory -Path "$TARGET_DIR\WEB-INF\classes" | Out-Null
     
-    if (Test-Path "$TOMCAT_HOME\webapps\$APP_NAME") {
-        Remove-Item -Path "$TOMCAT_HOME\webapps\$APP_NAME" -Recurse -Force -ErrorAction SilentlyContinue
-    } else {
-        INFO "No previous deployment found"
-    }
+        INFO "Copying JSP and static files..."
+        Copy-Item "$PROJECT_DIR\src\main\webapp\*" -Destination $TARGET_DIR -Recurse -Force
     
-    if (Test-Path "$TOMCAT_HOME\webapps\$APP_NAME.war") {
-        Remove-Item -Path "$TOMCAT_HOME\webapps\$APP_NAME.war" -Force -ErrorAction SilentlyContinue
-        INFO "Old WAR deployment removed"
-    } else {
-        INFO "No previous WAR deployment found"
-    }
-    
-    if ($Action -eq "deploy") {
-        Copy-Item -Path $WAR_FILE -Destination "$TOMCAT_HOME\webapps\"
-        INFO "New WAR file deployed"    
-    }
-}
-
-function Mvn {
-    param (
-        [ValidateSet("package")]
-        [string]$clean
-    )
-    $PROJECT_DIR = Get-Location
-    if (-not (Test-Path "$PROJECT_DIR\pom.xml")) {
-        exit 1
-    }
-    
-    $process = Start-Process -FilePath "mvn" -ArgumentList "clean package" -PassThru -Wait -NoNewWindow
-    
-    if ($process.ExitCode -ne 0) {
-        Write-Host "[ERROR] Maven build failed. Exiting." -ForegroundColor Red | Out-Null
-        if ($tomcatRunning) {
-            Tomcat -Action stop
-        } else {
-            INFO "Tomcat is not running"
+        if (Test-Path "$PROJECT_DIR\WEB-INF\classes") {
+            INFO "Copying compiled classes..."
+            Copy-Item "$PROJECT_DIR\WEB-INF\classes\*" -Destination "$TARGET_DIR\WEB-INF\classes" -Recurse -Force
         }
-        exit 1
-    }
-}
-
-switch ($action) {
-    "stop" {
-        INFO "Stopping Tomcat"
-        if ($tomcatRunning) {
-            Tomcat -Action stop
-        }  else {
-            INFO "Tomcat is not running"
-        }   
-        break
-    }
-    "clean" {
-        INFO "Cleaning Tomcat"
-        War -Action remove
-        break
-    }
-    "start" {
-        INFO "Starting Tomcat"
-        if ($tomcatRunning) {
-            INFO "Tomcat is already running"
-        }  else {
-            Tomcat -Action start
-        }           
-        break
-    }
-    "deploy" {
-        INFO "Deploying the application to Tomcat"
-        War -Action deploy
-        break
-    }
-    "auto" {
-        INFO "Automating the deployment process"
-        Mvn -clean package
-        War -Action deploy
-
-        $PROJECT_DIR = Get-Location
+    
+        INFO "Deployment completed successfully."
+    } elseif ($Type -eq "mvn") {
         if (-not (Test-Path "$PROJECT_DIR\pom.xml")) {
+            exit 1
+        }
+        
+        $process = Start-Process -FilePath "mvn" -ArgumentList "clean package" -PassThru -Wait -NoNewWindow
+        
+        if ($process.ExitCode -ne 0) {
+            ERRORLOG "Maven build failed. Exiting."
+            if ($tomcatRunning) {
+                Tomcat -Action stop
+            } else {
+                INFO "Tomcat is not running"
+            }
             exit 1
         }
 
         $WAR_FILE = Get-ChildItem -Path "$PROJECT_DIR\target" -Filter "*.war" | Select-Object -First 1 -ExpandProperty FullName
-        $APP_NAME = [System.IO.Path]::GetFileNameWithoutExtension($WAR_FILE)
-        
-        if ($tomcatRunning) {
-        INFO "Tomcat is already running, reloading"
-        $creds = New-Object System.Management.Automation.PSCredential("admin", (ConvertTo-SecureString "admin" -AsPlainText -Force))
-        Invoke-WebRequest -Uri "http://localhost:8080/manager/text/reload?path=/$APP_NAME" -Method Get -Credential $creds | Out-Null        
-        INFO "Tomcat reloaded"
-  
-        }  else {
-            Tomcat -Action start
-        }        
+        Copy-Item -Path $WAR_FILE -Destination "$TOMCAT_HOME\webapps\"
+    }
 
-        Write-Host "[" -NoNewline
-        Write-Host "DONE" -ForegroundColor Green -NoNewline
-        Write-Host "] Access your application at: " -NoNewline
-        Write-Host "http://localhost:8080/$APP_NAME" -ForegroundColor Cyan
+    tomcat -Action reload
 
-        $chromeProcesses = Get-Process -Name "chrome" -ErrorAction SilentlyContinue
+    runBrowser
+
+    DONE "Access your application at: "
+    Write-Host "http://localhost:8080/$APP_NAME" -ForegroundColor Cyan   
+}
+
+function runBrowser {
+    $chromeProcesses = Get-Process -Name "chrome" -ErrorAction SilentlyContinue
         
-        if ($chromeProcesses) {
-            $chromeOpened = $false
-            foreach ($process in $chromeProcesses) {
-                $chromeTitle = $process.MainWindowTitle
-                if ($chromeTitle -like "*$APP_NAME*") {
-                    $chromeOpened = $true
-                    Add-Type -AssemblyName System.Windows.Forms
-                    [System.Windows.Forms.SendKeys]::SendWait("^{F5}") # Ctrl+F5 for hard refresh
-                    INFO "Google Chrome reloaded"
-                    break
-                }
+    if ($chromeProcesses) {
+        $chromeOpened = $false
+        foreach ($process in $chromeProcesses) {
+            $chromeTitle = $process.MainWindowTitle
+            if ($chromeTitle -like "*$APP_NAME*") {
+                $chromeOpened = $true
+                Add-Type -AssemblyName System.Windows.Forms
+                [System.Windows.Forms.SendKeys]::SendWait("^{F5}") # Ctrl+F5 for hard refresh
+                INFO "Google Chrome reloaded"
+                break
             }
-        
-            if (-not $chromeOpened) {
-                INFO "Opening Google Chrome"
-                Start-Process "chrome" "http://localhost:8080/$APP_NAME"
-            }
-        } else {
+        }
+    
+        if (-not $chromeOpened) {
             INFO "Opening Google Chrome"
             Start-Process "chrome" "http://localhost:8080/$APP_NAME"
-        }    
+        }
+    } else {
+        INFO "Opening Google Chrome"
+        Start-Process "chrome" "http://localhost:8080/$APP_NAME"
+    }
+}
+
+switch ($Action) {
+    "start" {
+        tomcat -Action start
         break
     }
-"help" {
-    $ScriptName = [System.IO.Path]::GetFileNameWithoutExtension($MyInvocation.MyCommand.Name)
-    Write-Host @"
-=============================================================
-                 $ScriptName - Deployment Script Help
-=============================================================
-Usage:
-    $ScriptName <action>
-
-Actions:
-    stop      - Gracefully stops the Tomcat service if running.
-                Ensures no abrupt service termination.
-
-    clean     - Cleans the Tomcat deployment directory.
-                Removes temporary files and cached data to ensure a fresh deployment.
-
-    start     - Starts the Tomcat service.
-                Ensures the service is up and running after cleaning or deploying.
-
-    deploy    - Deploys the latest application version to the Tomcat server.
-                Copies necessary files and prepares the environment.
-
-    auto      - Automates the entire deployment process.
-                Stops the service, cleans the deployment directory, deploys the application, and restarts the service automatically.
-
-    help      - Displays this help message with detailed descriptions.
-
-=============================================================
-Examples:
-    $ScriptName auto   # Automates the deployment process
-    $ScriptName clean  # Cleans the Tomcat deployment
-    $ScriptName help   # Shows this help message
-=============================================================
-"@
+    "stop" {
+        tomcat -Action stop
+        break
+    }
+    "clean" {
+        cleanOldDeployments
+        break
+    }
+    "deploy" {
+        switch ($SubAction) {
+            "dev" {
+                deploy -Type dev
+                break
+            }
+            "mvn" {
+                deploy -Type mvn
+                break
+            }
+            default {
+                ERRORLOG "Invalid subaction $SubAction. Use 'dev' or 'mvn'."
+                exit 1
+            }
+        }
+        break
+    }
+    "help" {
+        HELP
         break
     }
     default {
-        Write-Host "[ERROR] Invalid action. Use 'help' to see available actions." -ForegroundColor Red
+        ERRORLOG "Invalid action $Action. Use 'start', 'stop', 'clean', 'deploy', or 'help'."
         exit 1
     }          
 }
