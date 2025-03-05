@@ -107,7 +107,7 @@ function tomcat {
         exit 1
     }
 
-    $tomcatRunning = Get-Process -Name "java" -ErrorAction SilentlyContinue
+    $tomcatRunning = (netstat -ano | Select-String ":8080").Count -gt 1
 
     if ($tomcatRunning) {
         if ($Action -eq "start") {
@@ -217,7 +217,7 @@ function runBrowser {
             if ($chromeTitle -like "*$APP_NAME*") {
                 $chromeOpened = $true
                 Add-Type -AssemblyName System.Windows.Forms
-                [System.Windows.Forms.SendKeys]::SendWait("^{F5}") # Ctrl+F5 for hard refresh
+                [System.Windows.Forms.SendKeys]::SendWait("^{F5}")
                 INFO "Google Chrome reloaded"
                 break
             }
