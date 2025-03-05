@@ -219,8 +219,8 @@ For Visual Studio Code users, the script can be configured to run automatically 
 "runOnSave.shell": "PowerShell",
 "runOnSave.commands": [
     {
-        "match": ".*$",
-        "command": "tom"
+        "match": ".jsp",
+        "command": "tom deploy dev",
     }
 ],
 "runOnSave.defaultRunIn": "terminal"
