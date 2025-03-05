@@ -2,7 +2,21 @@
 
 This PowerShell script automates the process of building, deploying, and managing JSP web applications on Apache Tomcat, opening the browser, and reloading the page with no user interaction.
 
-![Video](./tom-video.gif)
+## Deployment Speed Comparison
+
+### `tom deploy dev` (Fast Deployment)
+This video demonstrates the **`dev` deployment mode**, which directly deploys files from the development folder. This method is significantly faster as it skips the Maven build process.
+
+![Video](./tom-dev-video.gif)
+
+---
+
+### `tom deploy mvn` (Maven Build and Deploy)
+This video demonstrates the **`mvn` deployment mode**, which builds the project using Maven and deploys the generated WAR file. This method is slower due to the Maven build process.
+
+![Video](./tom-mvn-video.gif)
+
+---
 
 ## Features
 
@@ -44,16 +58,44 @@ Explanation: The script searches for the WAR file in the project's target direct
 </details>
 
 <details>
+<summary>Supports two deployment modes: `dev` and `mvn`</summary>
+
+The script now supports two deployment modes:
+- **`dev`**: Directly deploys files from the development folder.
+- **`mvn`**: Builds the project using Maven and deploys the generated WAR file.
+
+```powershell
+function deploy {
+    param (
+        [ValidateSet("dev", "mvn")]
+        [string]$Type
+    )
+
+    cleanOldDeployments
+    
+    if ($Type -eq "dev") {
+        # Deploy from development folder
+    } elseif ($Type -eq "mvn") {
+        # Build and deploy using Maven
+    }
+}
+```
+
+Explanation: The `deploy` function now accepts a `Type` parameter to specify the deployment mode. This allows for more flexibility in how the application is deployed.
+</details>
+
+<details>
 <summary>Starts or stops Tomcat based on its running status</summary>
 
 The script includes functionality to start or stop Tomcat depending on the given action (`start` or `stop`).
 
 ```powershell
-function Tomcat {
+function tomcat {
     param (
-        [ValidateSet("start", "stop")]
+        [ValidateSet("start", "stop", "reload")]
         [string]$Action
     )
+
     $javaExecutable = "$env:JAVA_HOME\bin\java.exe"
 
     Start-Process -FilePath $javaExecutable `
@@ -65,7 +107,7 @@ function Tomcat {
 }
 ```
 
-Explanation: The `Tomcat` function takes an action parameter (`start` or `stop`) and starts or stops the Tomcat server accordingly by executing the Java process with the appropriate arguments. If Tomcat is not already running, it can be started; if it is running, it can be stopped.
+Explanation: The `tomcat` function takes an action parameter (`start`, `stop`, or `reload`) and starts, stops, or reloads the Tomcat server accordingly by executing the Java process with the appropriate arguments.
 </details>
 
 <details>
@@ -142,14 +184,13 @@ Explanation: The script checks if Google Chrome is already open and refreshes th
 </details>
 
 ## Parameter Actions
-| Action   | Description                          |
-|----------|--------------------------------------|
-| start    | Starts the Tomcat server             |
-| stop     | Stops the Tomcat server              |
-| deploy   | Deploys the WAR file to Tomcat       |
-| clean    | Cleans previous deployments          |
-| auto     | Automates the entire process         |
-| help     | Displays help message                |
+| Action   | Description                          | Subactions (if applicable)       |
+|----------|--------------------------------------|----------------------------------|
+| start    | Starts the Tomcat server             | None                             |
+| stop     | Stops the Tomcat server              | None                             |
+| deploy   | Deploys the application to Tomcat    | `dev`: Deploy from development folder <br> `mvn`: Build and deploy using Maven |
+| clean    | Cleans previous deployments          | None                             |
+| help     | Displays help message                | None                             |
 
 ## Prerequisites
 Before using this script, ensure the following requirements are met:
@@ -159,14 +200,14 @@ Before using this script, ensure the following requirements are met:
 3. **[Maven](https://maven.apache.org/download.cgi)**: Installed and added to the system's `PATH`.
 4. **[Google Chrome](https://www.google.com/chrome/)**: Installed for automatic browser interaction.
 
-### This script assumes that the working directory contains the pom.xml file, indicating a valid Maven project. If the pom.xml is missing, the script will not run.
+### This script assumes that the working directory contains the `pom.xml` file (for Maven builds) or a valid project structure (for `dev` deployment). If these are missing, the script will not run.
 
 ### Extendable Code
 This script is designed to be **extendable**. You can add new functionality such as pre-deployment checks, custom notifications, or integrate with other tools.
 
 ### Add Custom Future Extensions:
 - **Custom Deployment Notifications**: You can modify the script to send email or Slack notifications after deployment.
-- **Custom Build Scripts**: Add new Maven goals or other build scripts as part of the mvn clean package command.
+- **Custom Build Scripts**: Add new Maven goals or other build scripts as part of the `mvn clean package` command.
 
 ## VS Code Automatic Execution
 For Visual Studio Code users, the script can be configured to run automatically on file save using the **Run on Save** extension.
@@ -188,7 +229,7 @@ For Visual Studio Code users, the script can be configured to run automatically 
 ## Error Handling
 - If **JAVA_HOME** or **CATALINA_HOME** is not set correctly, the script will terminate with an appropriate error message.
 - Maven build failures will stop further deployment.
-- Missing WAR files will prompt Tomcat shutdown before exit.
+- Missing WAR files or invalid project structures will prompt Tomcat shutdown before exit.
 
 ## License
 This script is licensed under the MIT [License](License).
