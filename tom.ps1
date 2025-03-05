@@ -1,6 +1,6 @@
 <#
     Author: Al-rimi
-    Version: 2.0
+    Version: 2.1.0
     Requirements:
     - JDK installed and `JAVA_HOME` set.
     - Apache Tomcat installed and `CATALINA_HOME` set.
@@ -200,36 +200,65 @@ function deploy{
     }
 
     tomcat -Action reload
-
-    runBrowser
+    RunBrowser
 
     DONE "Access your application at: "
     Write-Host "http://localhost:8080/$APP_NAME" -ForegroundColor Cyan   
 }
 
-function runBrowser {
-    $chromeProcesses = Get-Process -Name "chrome" -ErrorAction SilentlyContinue
-        
-    if ($chromeProcesses) {
-        $chromeOpened = $false
-        foreach ($process in $chromeProcesses) {
-            $chromeTitle = $process.MainWindowTitle
-            if ($chromeTitle -like "*$APP_NAME*") {
-                $chromeOpened = $true
-                Add-Type -AssemblyName System.Windows.Forms
-                [System.Windows.Forms.SendKeys]::SendWait("^{F5}")
-                INFO "Google Chrome reloaded"
-                break
-            }
-        }
+function RunBrowser {
+    $appUrl = "http://localhost:8080/$APP_NAME/"
+    $debugUrl = "http://localhost:9222/json"
     
-        if (-not $chromeOpened) {
-            INFO "Opening Google Chrome"
-            Start-Process "chrome" "http://localhost:8080/$APP_NAME"
+    try {
+        $sessions = Invoke-RestMethod -Uri $debugUrl -Method Get
+        $target = $sessions | Where-Object { $_.url -like "*$appUrl*" } | Select-Object -First 1
+
+        if ($target) {
+            $wsUrl = $target.webSocketDebuggerUrl
+
+            if ($wsUrl) {
+                
+                $webSocket = New-Object System.Net.WebSockets.ClientWebSocket
+                $uri = New-Object Uri($wsUrl)
+
+                $connectTask = $webSocket.ConnectAsync($uri, [System.Threading.CancellationToken]::None)
+                $connectTask.Wait()
+
+                if ($webSocket.State -eq [System.Net.WebSockets.WebSocketState]::Open) {                    
+                    $reloadCommand = @{
+                        id     = 1
+                        method = "Page.reload"
+                        params = @{}
+                    } | ConvertTo-Json -Compress
+                    $sendTask = $webSocket.SendAsync([System.Text.Encoding]::UTF8.GetBytes($reloadCommand), [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [System.Threading.CancellationToken]::None)
+                    $sendTask.Wait()
+
+                    $focusCommand = @{
+                        id     = 2
+                        method = "Target.activateTarget"
+                        params = @{
+                            targetId = $target.id
+                        }
+                    } | ConvertTo-Json -Compress
+                    $focusSendTask = $webSocket.SendAsync([System.Text.Encoding]::UTF8.GetBytes($focusCommand), [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [System.Threading.CancellationToken]::None)
+                    $focusSendTask.Wait()
+                    INFO "Browser reloaded."
+
+                } else {
+                    ERRORLOG "Failed to connect to WebSocket."
+                }
+
+            } else {
+                ERRORLOG "No WebSocket URL found!"
+            }
+        } else {
+            INFO "No matching Chrome session, opening a new one..."
+            Start-Process "chrome" "--remote-debugging-port=9222 $appUrl"
         }
-    } else {
-        INFO "Opening Google Chrome"
-        Start-Process "chrome" "http://localhost:8080/$APP_NAME"
+    } catch {
+        INFO "Window not found, opening a new one..."
+        Start-Process "chrome" "--remote-debugging-port=9222 $appUrl"
     }
 }
 
