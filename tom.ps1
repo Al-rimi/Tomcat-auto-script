@@ -1,6 +1,6 @@
 <#
     Author: Al-rimi
-    Version: 2.1.0
+    Version: 2.1.1
     Requirements:
     - JDK installed and `JAVA_HOME` set.
     - Apache Tomcat installed and `CATALINA_HOME` set.
