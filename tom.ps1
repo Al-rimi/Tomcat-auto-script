@@ -107,7 +107,7 @@ function tomcat {
         exit 1
     }
 
-    $tomcatRunning = (netstat -ano | Select-String ":8080").Count -gt 1
+    $tomcatRunning = (netstat -ano | Select-String "0.0.0.0:8080").Count -gt 0
 
     if ($tomcatRunning) {
         if ($Action -eq "start") {
@@ -200,13 +200,13 @@ function deploy{
     }
 
     tomcat -Action reload
-    RunBrowser
+    runBrowser
 
     DONE "Access your application at: "
     Write-Host "http://localhost:8080/$APP_NAME" -ForegroundColor Cyan   
 }
 
-function RunBrowser {
+function runBrowser {
     $appUrl = "http://localhost:8080/$APP_NAME/"
     $debugUrl = "http://localhost:9222/json"
     
